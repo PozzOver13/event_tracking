@@ -1,0 +1,18 @@
+[project]
+name = "event-tracking"
+version = "0.1.0"
+description = "Event Tracking Project"
+authors = [
+    {name = "Stefano Pozzati",email = "pozz.ste@gmail.com"}
+]
+readme = "README.md"
+requires-python = "3.13"
+dependencies = [
+    "google (>=3.0.0,<4.0.0)",
+    "langchain (>=0.3.23,<0.4.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
