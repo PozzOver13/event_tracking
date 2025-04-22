@@ -3,6 +3,8 @@ import json
 import datetime
 import pandas as pd
 
+from dotenv import load_dotenv, find_dotenv
+
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -38,9 +40,55 @@ def get_google_calendar_credentials():
     return creds
 
 
+def get_calendars_to_include():
+    """
+    Recupera la lista dei calendari da includere dall'ambiente
+    Formato della variabile d'ambiente: CALENDARS_TO_INCLUDE=calendario1,calendario2,calendario3
+    """
+    dotenv_path = find_dotenv()
+
+    # load up the entries as environment variables
+    load_dotenv(dotenv_path)
+
+    calendars_str = os.environ.get('CALENDARS_TO_INCLUDE', '')
+    if not calendars_str:
+        # Se la variabile non è impostata, includi tutti i calendari
+        return None
+
+    # Split della stringa in una lista di nomi di calendari
+    return [cal.strip() for cal in calendars_str.split(',')]
+
+
+def fetch_all_calendars(service):
+    """
+    Recupera tutti i calendari disponibili per l'utente
+    e filtra in base alla variabile d'ambiente
+    """
+    calendar_list = service.calendarList().list().execute()
+    all_calendars = calendar_list.get('items', [])
+
+    calendars_to_include = get_calendars_to_include()
+
+    if calendars_to_include is None:
+        # Includi tutti i calendari
+        print(f"Nessun filtro specificato. Inclusi tutti i {len(all_calendars)} calendari.")
+        return all_calendars
+
+    # Filtra i calendari in base al nome
+    filtered_calendars = [
+        cal for cal in all_calendars
+        if cal['summary'] in calendars_to_include
+    ]
+
+    print(f"Filtrati {len(filtered_calendars)} calendari su {len(all_calendars)} totali.")
+    print(f"Calendari inclusi: {[cal['summary'] for cal in filtered_calendars]}")
+
+    return filtered_calendars
+
+
 def fetch_calendar_events(time_period_days=30):
     """
-    Recupera gli eventi dal calendario dell'utente per un determinato periodo di tempo
+    Recupera gli eventi da tutti i calendari dell'utente per un determinato periodo di tempo
     """
     creds = get_google_calendar_credentials()
     service = build('calendar', 'v3', credentials=creds)
@@ -55,17 +103,38 @@ def fetch_calendar_events(time_period_days=30):
 
     print(f'Recupero eventi dal {start_date.strftime("%Y-%m-%d")} a oggi')
 
-    # Chiama l'API Calendar
-    events_result = service.events().list(
-        calendarId='primary',
-        timeMin=start_date_str,
-        timeMax=now_str,
-        singleEvents=True,
-        orderBy='startTime'
-    ).execute()
+    # Recupera tutti i calendari
+    calendars = fetch_all_calendars(service)
+    print(f'Trovati {len(calendars)} calendari')
 
-    events = events_result.get('items', [])
-    return events
+    all_events = []
+
+    # Per ogni calendario, recupera gli eventi
+    for calendar in calendars:
+        calendar_id = calendar['id']
+        calendar_name = calendar['summary']
+        print(f'Recupero eventi dal calendario: {calendar_name}')
+
+        events_result = service.events().list(
+            calendarId=calendar_id,
+            timeMin=start_date_str,
+            timeMax=now_str,
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+
+        events = events_result.get('items', [])
+
+        # Aggiungi il nome del calendario a ogni evento
+        for event in events:
+            event['calendar_name'] = calendar_name
+            event['calendar_id'] = calendar_id
+
+        all_events.extend(events)
+        print(f'  - Trovati {len(events)} eventi in questo calendario')
+
+    print(f'Totale eventi recuperati: {len(all_events)}')
+    return all_events
 
 
 def process_calendar_events(events):
@@ -80,6 +149,10 @@ def process_calendar_events(events):
         summary = event.get('summary', 'Evento senza titolo')
         description = event.get('description', '')
         location = event.get('location', '')
+
+        # Informazioni sul calendario
+        calendar_name = event.get('calendar_name', 'Calendario principale')
+        calendar_id = event.get('calendar_id', 'primary')
 
         # Gestione delle date di inizio e fine
         start_time = None
@@ -114,6 +187,8 @@ def process_calendar_events(events):
             'summary': summary,
             #'description': description,
             #'location': location,
+            'calendar_name': calendar_name,  # Aggiunta questa riga
+            #'calendar_id': calendar_id,  # Aggiunta questa riga
             'start_time': start_time,
             'end_time': end_time,
             'all_day': all_day,
@@ -122,6 +197,7 @@ def process_calendar_events(events):
             #'attendee_count': len(attendees),
             'day_of_week': start_time.strftime('%A'),
             'week_number': start_time.isocalendar()[1],
+            'day': start_time.day,
             'month': start_time.strftime('%B'),
             'year': start_time.year,
             'hour_of_day': start_time.hour if not all_day else None

@@ -8,12 +8,15 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
+    "dotenv>=0.9.9",
+    "fastparquet>=2024.2.0",
     "google>=3.0.0",
     "google-api-python-client>=2.167.0",
     "google-auth-oauthlib>=1.2.1",
     "jupyter>=1.1.1",
     "langchain>=0.0.27",
     "pandas>=2.0.3",
+    "pyarrow>=17.0.0",
     "pytest>=8.3.5",
 ]
 
