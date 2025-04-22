@@ -12,68 +12,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 
 
-def process_calendar_events(events):
-    """
-    Elabora gli eventi del calendario e li trasforma in un DataFrame
-    """
-    processed_events = []
-
-    for event in events:
-        # Estrai informazioni di base
-        event_id = event.get('id', '')
-        summary = event.get('summary', 'Evento senza titolo')
-        description = event.get('description', '')
-        location = event.get('location', '')
-
-        # Gestione delle date di inizio e fine
-        start_time = None
-        end_time = None
-        all_day = False
-
-        if 'dateTime' in event['start']:
-            # Evento con orario specifico
-            start_time = datetime.datetime.fromisoformat(event['start']['dateTime'].replace('Z', '+00:00'))
-            end_time = datetime.datetime.fromisoformat(event['end']['dateTime'].replace('Z', '+00:00'))
-        else:
-            # Evento che dura tutto il giorno
-            start_time = datetime.datetime.fromisoformat(event['start']['date'])
-            end_time = datetime.datetime.fromisoformat(event['end']['date'])
-            all_day = True
-
-        # Calcola la durata in minuti (per eventi non di tutto il giorno)
-        duration_minutes = None
-        if not all_day:
-            duration = end_time - start_time
-            duration_minutes = duration.total_seconds() / 60
-
-        # Raccogli informazioni sui partecipanti
-        attendees = []
-        if 'attendees' in event:
-            for attendee in event['attendees']:
-                attendees.append(attendee.get('email', ''))
-
-        # Crea un dizionario con tutte le informazioni rilevanti
-        event_data = {
-            'event_id': event_id,
-            'summary': summary,
-            'description': description,
-            'location': location,
-            'start_time': start_time,
-            'end_time': end_time,
-            'all_day': all_day,
-            'duration_minutes': duration_minutes,
-            'attendees': attendees,
-            'attendee_count': len(attendees),
-            'day_of_week': start_time.strftime('%A'),
-            'week_number': start_time.isocalendar()[1],
-            'month': start_time.strftime('%B'),
-            'year': start_time.year,
-            'hour_of_day': start_time.hour if not all_day else None
-        }
-
-        processed_events.append(event_data)
-
-    return pd.DataFrame(processed_events)
 
 
 def create_langchain_documents(df):
