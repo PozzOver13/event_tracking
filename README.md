@@ -59,3 +59,7 @@ The main goal is to explore and learn, so the codebase will evolve iteratively w
     │
     ├── config.py                    <- Store useful variables and configuration
 ```
+
+## Dashboard
+
+    streamlit run development/dashboard.py
