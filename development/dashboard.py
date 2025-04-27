@@ -5,6 +5,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import calendar
 from datetime import datetime, timedelta
+
+from event_tracking.components.dashboard import *
 from event_tracking.config import RAW_DATA_DIR
 
 file_path = os.path.join(RAW_DATA_DIR, 'my_calendar_db.parquet')
@@ -32,36 +34,26 @@ def load_data():
         st.error(f"Errore nel caricamento del file parquet: {e}")
         return None
 
-
-# Dizionario dei colori personalizzati per calendario
-calendar_colors = {
-    "Giulia": "#FFB6C1",  # Rosa pastello
-    "Pozz": "#ADD8E6",  # Blu pastello
-    "Pozz Health & Learn": "#98FB98",  # Verde pastello
-    "Pozz Work": "#FFFACD"  # Giallo pastello
-}
-
-# Stile e intestazione
-st.title("📅 Dashboard Analisi Google Calendar")
-st.markdown("""
-Questa dashboard ti permette di esplorare e analizzare i tuoi eventi di Google Calendar.
-Utilizza i filtri sulla barra laterale per personalizzare la visualizzazione.
-""")
+header_display()
 
 # Caricamento dati
 df = load_data()
 
 if df is not None:
-    # Preparazione della sidebar per i filtri
-    st.sidebar.header("Filtri")
+    # # Preparazione della sidebar per i filtri
+    # st.sidebar.header("Filtri")
+    #
+    # # Filtro per anno
+    # years = sorted(df['year'].unique())
+    # selected_year = st.sidebar.selectbox("Anno", years, index=len(years) - 1)
+    #
+    # # Filtro per calendario
+    # calendars = sorted(df['calendar_name'].unique())
+    # selected_calendars = st.sidebar.multiselect("Calendari", calendars, default=calendars)
 
-    # Filtro per anno
-    years = sorted(df['year'].unique())
-    selected_year = st.sidebar.selectbox("Anno", years, index=len(years) - 1)
-
-    # Filtro per calendario
-    calendars = sorted(df['calendar_name'].unique())
-    selected_calendars = st.sidebar.multiselect("Calendari", calendars, default=calendars)
+    dict_sidebar = sidebar_display(df)
+    selected_year = dict_sidebar["selected_year"]
+    selected_calendars = dict_sidebar["selected_calendars"]
 
     # Applicazione filtri
     filtered_df = df[(df['year'] == selected_year) &
@@ -73,27 +65,19 @@ if df is not None:
     with col1:
         st.subheader("Distribuzione eventi per mese")
 
-        # Creazione di un dizionario per mappare i numeri dei mesi ai nomi in italiano
-        mesi_italiani = {
-            'January': 'Gennaio', 'February': 'Febbraio', 'March': 'Marzo',
-            'April': 'Aprile', 'May': 'Maggio', 'June': 'Giugno',
-            'July': 'Luglio', 'August': 'Agosto', 'September': 'Settembre',
-            'October': 'Ottobre', 'November': 'Novembre', 'December': 'Dicembre'
-        }
-
         # Conversione nomi mesi in italiano se disponibili
-        filtered_df['mese'] = filtered_df['month'].map(mesi_italiani).fillna(filtered_df['month'])
+        filtered_df['mese'] = filtered_df['month'].map(MESI_ITALIANI).fillna(filtered_df['month'])
 
         # Ordine corretto dei mesi per il grafico
-        month_order = [mesi_italiani.get(month, month) for month in calendar.month_name[1:]]
+        month_order = [MESI_ITALIANI.get(month, month) for month in calendar.month_name[1:]]
 
         # Conteggio eventi per mese e calendario
-        monthly_events = filtered_df.groupby(['mese', 'calendar_name']).size().reset_index(name='numero_eventi')
+        monthly_events = filtered_df.groupby(['mese', 'calendar_name', 'summary']).size().reset_index(name='numero_eventi')
 
         # Estrai i calendari presenti nei dati filtrati e crea una mappatura dei colori
         present_calendars = filtered_df['calendar_name'].unique()
         color_discrete_map = {
-            cal: calendar_colors.get(cal, px.colors.qualitative.Pastel[i % len(px.colors.qualitative.Pastel)])
+            cal: CALENDAR_COLORS.get(cal, px.colors.qualitative.Pastel[i % len(px.colors.qualitative.Pastel)])
             for i, cal in enumerate(present_calendars)}
 
         # Creazione istogramma con Plotly e colori personalizzati
@@ -115,45 +99,6 @@ if df is not None:
             legend_title='Calendario',
             height=500
         )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Distribuzione per giorno della settimana
-        st.subheader("Eventi per giorno della settimana")
-
-        # Mappatura in italiano dei giorni della settimana
-        giorni_italiani = {
-            'Monday': 'Lunedì', 'Tuesday': 'Martedì', 'Wednesday': 'Mercoledì',
-            'Thursday': 'Giovedì', 'Friday': 'Venerdì', 'Saturday': 'Sabato', 'Sunday': 'Domenica'
-        }
-
-        filtered_df['giorno'] = filtered_df['day_of_week'].map(giorni_italiani).fillna(filtered_df['day_of_week'])
-
-        # Ordine corretto dei giorni
-        weekday_order = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica']
-
-        weekday_events = filtered_df.groupby(['giorno', 'calendar_name']).size().reset_index(name='count')
-
-        fig_weekday = px.histogram(
-            weekday_events,
-            x='giorno',
-            y='count',
-            color='calendar_name',
-            title=f'Eventi per giorno della settimana ({selected_year})',
-            labels={'giorno': 'Giorno', 'count': 'Numero di eventi', 'calendar_name': 'Calendario'},
-            category_orders={"giorno": weekday_order},
-            barmode='group',
-            color_discrete_map=color_discrete_map  # Usa la stessa mappatura dei colori
-        )
-
-        fig_weekday.update_layout(
-            xaxis_title='Giorno della Settimana',
-            yaxis_title='Numero di Eventi',
-            legend_title='Calendario',
-            height=400
-        )
-
-        st.plotly_chart(fig_weekday, use_container_width=True)
 
     with col2:
         st.subheader("Statistiche")
@@ -206,7 +151,7 @@ if df is not None:
         # Visualizzazione della legenda dei colori
         st.subheader("Legenda colori calendari")
         for calendar_name in selected_calendars:
-            color = calendar_colors.get(calendar_name, "#CCCCCC")  # Colore di default grigio
+            color = CALENDAR_COLORS.get(calendar_name, "#CCCCCC")  # Colore di default grigio
             st.markdown(
                 f"<div style='display: flex; align-items: center;'>"
                 f"<div style='width: 20px; height: 20px; background-color: {color}; margin-right: 10px;'></div>"
