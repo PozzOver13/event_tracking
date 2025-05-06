@@ -18,7 +18,7 @@ MESI_ITALIANI = {
 
 def header_display():
     # Stile e intestazione
-    st.title("📅 Dashboard Analisi Google Calendar")
+    st.title("📅 Monthly Review")
     st.markdown("""
     Questa dashboard ti permette di esplorare e analizzare i tuoi eventi di Google Calendar.
     Utilizza i filtri sulla barra laterale per personalizzare la visualizzazione.
@@ -42,3 +42,4 @@ def sidebar_display(df):
     }
 
     return dict_out
+

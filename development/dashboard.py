@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from event_tracking.components.dashboard import *
 from event_tracking.config import RAW_DATA_DIR
 
-file_path = os.path.join(RAW_DATA_DIR, 'my_calendar_db.parquet')
+file_path = os.path.join(RAW_DATA_DIR, 'my_calendar_db_20250506.parquet')
 
 # Configurazione pagina
 st.set_page_config(

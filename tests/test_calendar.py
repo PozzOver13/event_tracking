@@ -29,3 +29,11 @@ def test_process_calendar_events():
     events_df = process_calendar_events(events)
 
     print(events_df)
+
+
+def test_categorize_calendar_events():
+    events = fetch_calendar_events(5)
+    events_df = process_calendar_events(events)
+    events_df_categorized = categorize_calendar_events(events_df)
+
+    print(events_df_categorized)

@@ -17,11 +17,13 @@ dependencies = [
     "langchain>=0.0.27",
     "langchain-community>=0.2.19",
     "langchain-openai>=0.1.25",
+    "matplotlib>=3.7.5",
     "openai>=1.76.0",
     "pandas>=2.0.3",
     "plotly-express>=0.4.1",
     "pyarrow>=17.0.0",
     "pytest>=8.3.5",
+    "seaborn>=0.13.2",
     "streamlit>=1.40.1",
 ]
 

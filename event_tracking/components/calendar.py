@@ -12,8 +12,25 @@ from googleapiclient.discovery import build
 
 from event_tracking.config import PATH_TOKEN, PATH_CREDENTIALS
 
+from dotenv import load_dotenv, find_dotenv
+
+from langchain_openai import ChatOpenAI
+from langchain.chains import LLMChain
+import openai
+
+_ = load_dotenv(find_dotenv())  # read local .env file
+openai.api_key = os.environ['OPENAI_API_KEY']
+
 # Configurazione dell'autenticazione Google
 SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
+
+WORK_CATEGORIES = ["avm-property-value", "avm-meetings", "avm-genertel-poc",
+                   "finbox-meetings", "finbox-gara-mcc", "finbox-privati",
+                   "finbox-deploy-affordability",
+                   "smart-lending-suite-meetings",
+                   "side-project-tools-n-pipeline", "dss-best-practices",
+                   "other"]
+
 
 def get_google_calendar_credentials():
     creds = None
@@ -185,16 +202,16 @@ def process_calendar_events(events):
         event_data = {
             'event_id': event_id,
             'summary': summary,
-            #'description': description,
-            #'location': location,
+            # 'description': description,
+            # 'location': location,
             'calendar_name': calendar_name,  # Aggiunta questa riga
-            #'calendar_id': calendar_id,  # Aggiunta questa riga
+            # 'calendar_id': calendar_id,  # Aggiunta questa riga
             'start_time': start_time,
             'end_time': end_time,
             'all_day': all_day,
             'duration_minutes': duration_minutes,
-            #'attendees': attendees,
-            #'attendee_count': len(attendees),
+            # 'attendees': attendees,
+            # 'attendee_count': len(attendees),
             'day_of_week': start_time.strftime('%A'),
             'week_number': start_time.isocalendar()[1],
             'day': start_time.day,
@@ -206,3 +223,71 @@ def process_calendar_events(events):
         processed_events.append(event_data)
 
     return pd.DataFrame(processed_events)
+
+
+def categorize_calendar_events(events_df, batch_size=10):
+    events_df_work = (
+        events_df
+        .loc[(events_df["calendar_name"] == "Pozz Work"), :]
+        # .head()
+        .groupby(["summary"])
+        .size()
+        .to_frame("count")
+        .sort_values("count", ascending=False)
+        .fillna(0)
+        .reset_index()
+    )
+
+    # batch_size = 70  # puoi aumentare finché non superi i limiti di token
+    llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+
+    results = []
+    for i in range(0, len(events_df_work), batch_size):
+        batch = events_df_work.iloc[i:i + batch_size]
+        batch_categories = classify_batch_openai_api(llm, batch["summary"].tolist(), categories)
+        results.extend(batch_categories)
+
+    # Verifica che lunghezze corrispondano
+    if len(results) != len(events_df_work):
+        raise ValueError(f"Mismatch: {len(results)} results vs {len(events_df)} rows")
+
+    events_df_work["event_category"] = results
+    events_df_work["calendar_name"] = "Pozz Work"
+
+    events_df_categorized = (
+        events_df
+        # .head()
+        .merge(events_df_work, on=["calendar_name", "summary"], how="left")
+    )
+
+    return events_df_categorized
+
+
+
+def classify_batch_openai_api(llm_app, summaries, categories):
+    joined = "\n".join([f"{i+1}. {text}" for i, text in enumerate(summaries)])
+    prompt = f"""
+Classifica ciascun testo nella seguente lista in **una sola** delle categorie seguenti:
+{", ".join(categories)}
+
+Ecco i testi da classificare (uno per riga, preceduto dal numero):
+
+{joined}
+
+Rispondi fornendo solo una lista nel formato:
+
+1. categoria
+2. categoria
+...
+"""
+    response = llm_app.invoke(prompt)
+    lines = response.content.strip().split("\n")
+    # Rimuove numerazione e tiene solo le categorie
+    return [line.split(". ", 1)[1].strip() for line in lines if ". " in line]
+
+# Parametri
+categories = [ "avm-property-value", "avm-meetings", "avm-genertel-poc",
+    "finbox-meetings", "finbox-gara-mcc", "finbox-privati",
+    "finbox-deploy-affordability", "smart-lending-suite-meetings",
+    "side-project-tools-n-pipeline", "dss-best-practices", "other"
+]
