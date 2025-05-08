@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from event_tracking.components.dashboard import *
 from event_tracking.config import RAW_DATA_DIR
 
-file_path = os.path.join(RAW_DATA_DIR, 'my_calendar_db_20250506.parquet')
+file_path = os.path.join(RAW_DATA_DIR, 'my_calendar_db_20250508.parquet')
 
 # Configurazione pagina
 st.set_page_config(
@@ -24,6 +24,11 @@ st.set_page_config(
 def load_data():
     try:
         df = pd.read_parquet(file_path)
+
+        df['year_only'] = df['start_time'].dt.year.astype(str)
+        df['year_month'] = df['start_time'].dt.strftime('%Y-%m')
+        df['year_month_week'] = df['start_time'].dt.strftime('%Y-%m-') + df['week_number'].astype(str).str.zfill(2)
+
         # Conversione delle colonne di data/ora se necessario
         if pd.api.types.is_object_dtype(df['start_time']):
             df['start_time'] = pd.to_datetime(df['start_time'])
@@ -40,20 +45,10 @@ header_display()
 df = load_data()
 
 if df is not None:
-    # # Preparazione della sidebar per i filtri
-    # st.sidebar.header("Filtri")
-    #
-    # # Filtro per anno
-    # years = sorted(df['year'].unique())
-    # selected_year = st.sidebar.selectbox("Anno", years, index=len(years) - 1)
-    #
-    # # Filtro per calendario
-    # calendars = sorted(df['calendar_name'].unique())
-    # selected_calendars = st.sidebar.multiselect("Calendari", calendars, default=calendars)
-
     dict_sidebar = sidebar_display(df)
     selected_year = dict_sidebar["selected_year"]
     selected_calendars = dict_sidebar["selected_calendars"]
+    selected_time_scale = dict_sidebar["selected_time_scale"]
 
     # Applicazione filtri
     filtered_df = df[(df['year'] == selected_year) &
@@ -63,42 +58,12 @@ if df is not None:
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        st.subheader("Distribuzione eventi per mese")
+        st.subheader("Distribuzione attività lavorative")
 
-        # Conversione nomi mesi in italiano se disponibili
-        filtered_df['mese'] = filtered_df['month'].map(MESI_ITALIANI).fillna(filtered_df['month'])
+        fig_contribution = get_contribution_plot(df, view=selected_time_scale)
 
-        # Ordine corretto dei mesi per il grafico
-        month_order = [MESI_ITALIANI.get(month, month) for month in calendar.month_name[1:]]
+        st.plotly_chart(fig_contribution, use_container_width=True)
 
-        # Conteggio eventi per mese e calendario
-        monthly_events = filtered_df.groupby(['mese', 'calendar_name', 'summary']).size().reset_index(name='numero_eventi')
-
-        # Estrai i calendari presenti nei dati filtrati e crea una mappatura dei colori
-        present_calendars = filtered_df['calendar_name'].unique()
-        color_discrete_map = {
-            cal: CALENDAR_COLORS.get(cal, px.colors.qualitative.Pastel[i % len(px.colors.qualitative.Pastel)])
-            for i, cal in enumerate(present_calendars)}
-
-        # Creazione istogramma con Plotly e colori personalizzati
-        fig = px.histogram(
-            monthly_events,
-            x='mese',
-            y='numero_eventi',
-            color='calendar_name',
-            title=f'Eventi per mese ({selected_year})',
-            labels={'mese': 'Mese', 'numero_eventi': 'Numero di eventi', 'calendar_name': 'Calendario'},
-            category_orders={"mese": month_order},
-            barmode='group',
-            color_discrete_map=color_discrete_map  # Usa la mappatura dei colori personalizzata
-        )
-
-        fig.update_layout(
-            xaxis_title='Mese',
-            yaxis_title='Numero di Eventi',
-            legend_title='Calendario',
-            height=500
-        )
 
     with col2:
         st.subheader("Statistiche")
@@ -113,52 +78,6 @@ if df is not None:
         st.metric("Durata media", f"{avg_duration:.1f} min")
         st.metric("Eventi giornalieri", f"{all_day_events}")
 
-        # Top 5 mesi più impegnati
-        st.subheader("Mesi più impegnati")
-        busy_months = filtered_df.groupby('mese').size().sort_values(ascending=False).reset_index(name='eventi')
-        st.dataframe(busy_months.head(5), hide_index=True)
-
-        # Distribuzione oraria
-        st.subheader("Distribuzione oraria")
-
-        # Filtro per eventi non giornalieri (con ora specificata)
-        hourly_df = filtered_df[filtered_df['all_day'] == False]
-
-        if not hourly_df.empty:
-            hour_counts = hourly_df.groupby(['hour_of_day', 'calendar_name']).size().reset_index(name='count')
-
-            fig_hours = px.bar(
-                hour_counts,
-                x='hour_of_day',
-                y='count',
-                color='calendar_name',
-                title='Eventi per ora del giorno',
-                labels={'hour_of_day': 'Ora', 'count': 'Numero di eventi'},
-                color_discrete_map=color_discrete_map  # Usa la stessa mappatura dei colori
-            )
-
-            fig_hours.update_layout(
-                xaxis=dict(tickmode='linear', tick0=0, dtick=2),
-                xaxis_title='Ora del giorno',
-                yaxis_title='Numero di eventi',
-                height=350
-            )
-
-            st.plotly_chart(fig_hours, use_container_width=True)
-        else:
-            st.info("Non ci sono eventi con ora specificata nel periodo selezionato.")
-
-        # Visualizzazione della legenda dei colori
-        st.subheader("Legenda colori calendari")
-        for calendar_name in selected_calendars:
-            color = CALENDAR_COLORS.get(calendar_name, "#CCCCCC")  # Colore di default grigio
-            st.markdown(
-                f"<div style='display: flex; align-items: center;'>"
-                f"<div style='width: 20px; height: 20px; background-color: {color}; margin-right: 10px;'></div>"
-                f"<div>{calendar_name}</div>"
-                f"</div>",
-                unsafe_allow_html=True
-            )
 
     # Sezione per analisi futura con LLM
     st.subheader("🤖 Chat Analisi Tempo")
