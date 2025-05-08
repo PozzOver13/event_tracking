@@ -2,6 +2,9 @@
 
 > A side project to track events, reflections, and personal goals, while experimenting with LLMs and modern Python libraries.
 
+![Overview](docs/overview_20250508.png)
+
+
 ## 🎯 Project Goal
 
 Event Tracking is a mini application designed to help me:
@@ -28,6 +31,7 @@ Event Tracking is a mini application designed to help me:
 
 ⚠️ **In early development (alpha)**  
 The main goal is to explore and learn, so the codebase will evolve iteratively with frequent experiments and refactoring.
+
 
 ## 🧪 Learning Objectives
 
