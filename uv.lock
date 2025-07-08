@@ -1140,6 +1140,7 @@ dependencies = [
     { name = "pyarrow", version = "17.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "pyarrow", version = "19.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
     { name = "pytest" },
+    { name = "pytz" },
     { name = "seaborn" },
     { name = "streamlit", version = "1.40.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "streamlit", version = "1.44.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
@@ -1163,6 +1164,7 @@ requires-dist = [
     { name = "plotly-express", specifier = ">=0.4.1" },
     { name = "pyarrow", specifier = ">=17.0.0" },
     { name = "pytest", specifier = ">=8.3.5" },
+    { name = "pytz", specifier = ">=2025.2" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "streamlit", specifier = ">=1.40.1" },
 ]

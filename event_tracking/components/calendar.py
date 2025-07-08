@@ -2,7 +2,7 @@ import os
 import json
 import datetime
 import pandas as pd
-
+import pytz
 from dotenv import load_dotenv, find_dotenv
 
 from google.oauth2.credentials import Credentials
@@ -105,7 +105,8 @@ def fetch_all_calendars(service):
 
 def fetch_calendar_events(time_period_days=30):
     """
-    Recupera gli eventi da tutti i calendari dell'utente per un determinato periodo di tempo
+    Recupera gli eventi da tutti i calendari dell'utente per un determinato periodo di tempo,
+    gestendo la paginazione per ottenere tutti gli eventi.
     """
     creds = get_google_calendar_credentials()
     service = build('calendar', 'v3', credentials=creds)
@@ -126,31 +127,46 @@ def fetch_calendar_events(time_period_days=30):
 
     all_events = []
 
-    # Per ogni calendario, recupera gli eventi
+    # Per ogni calendario, recupera gli eventi con paginazione
     for calendar in calendars:
         calendar_id = calendar['id']
         calendar_name = calendar['summary']
         print(f'Recupero eventi dal calendario: {calendar_name}')
 
-        events_result = service.events().list(
-            calendarId=calendar_id,
-            timeMin=start_date_str,
-            timeMax=now_str,
-            singleEvents=True,
-            orderBy='startTime'
-        ).execute()
+        page_token = None
+        total_events_in_calendar = 0
 
-        events = events_result.get('items', [])
+        while True:
+            events_result = service.events().list(
+                calendarId=calendar_id,
+                timeMin=start_date_str,
+                timeMax=now_str,
+                singleEvents=True,
+                orderBy='startTime',
+                maxResults=2500,  # Imposta il limite massimo per pagina
+                pageToken=page_token  # Aggiungi il pageToken se disponibile
+            ).execute()
 
-        # Aggiungi il nome del calendario a ogni evento
-        for event in events:
-            event['calendar_name'] = calendar_name
-            event['calendar_id'] = calendar_id
+            events = events_result.get('items', [])
 
-        all_events.extend(events)
-        print(f'  - Trovati {len(events)} eventi in questo calendario')
+            # Aggiungi il nome del calendario a ogni evento
+            for event in events:
+                event['calendar_name'] = calendar_name
+                event['calendar_id'] = calendar_id
 
-    print(f'Totale eventi recuperati: {len(all_events)}')
+            all_events.extend(events)
+            total_events_in_calendar += len(events)
+
+            page_token = events_result.get('nextPageToken')
+
+            if not page_token:
+                # Non ci sono più pagine, esci dal ciclo
+                break
+            print(f'  - Trovati {len(events)} eventi in questa pagina. Recupero la prossima pagina...')
+
+        print(f'  - Totale eventi recuperati per {calendar_name}: {total_events_in_calendar}')
+
+    print(f'Totale eventi recuperati complessivamente: {len(all_events)}')
     return all_events
 
 
@@ -260,22 +276,25 @@ def categorize_calendar_events(events_df, batch_size=10):
         .merge(events_df_work, on=["calendar_name", "summary"], how="left")
     )
 
-    events_df_categorized['start_time'] = pd.to_datetime(
-        events_df_categorized['start_time'],
-        errors='coerce',
-        utc=True
-    ).dt.tz_convert(None)
+    # events_df_categorized['start_time'] = pd.to_datetime(
+    #     events_df_categorized['start_time'],
+    #     errors='coerce',
+    #     utc=True
+    # ).dt.tz_convert(None)
+
+    events_df_categorized['start_time'] = events_df_categorized['start_time'].apply(
+        lambda x: x.astimezone(pytz.utc).replace(tzinfo=None) if x is not None and x.tzinfo is not None else x)
 
     events_df_categorized['year_only'] = events_df_categorized['start_time'].dt.year.astype(str)
     events_df_categorized['year_month'] = events_df_categorized['start_time'].dt.strftime('%Y-%m')
-    events_df_categorized['year_month_week'] = events_df_categorized['start_time'].dt.strftime('%Y-%m-') + events_df_categorized['week_number'].astype(str).str.zfill(2)
+    events_df_categorized['year_month_week'] = events_df_categorized['start_time'].dt.strftime('%Y-%m-') + \
+                                               events_df_categorized['week_number'].astype(str).str.zfill(2)
 
     return events_df_categorized
 
 
-
 def classify_batch_openai_api(llm_app, summaries, categories):
-    joined = "\n".join([f"{i+1}. {text}" for i, text in enumerate(summaries)])
+    joined = "\n".join([f"{i + 1}. {text}" for i, text in enumerate(summaries)])
     prompt = f"""
 Classifica ciascun testo nella seguente lista in **una sola** delle categorie seguenti:
 {", ".join(categories)}
@@ -295,9 +314,10 @@ Rispondi fornendo solo una lista nel formato:
     # Rimuove numerazione e tiene solo le categorie
     return [line.split(". ", 1)[1].strip() for line in lines if ". " in line]
 
+
 # Parametri
-categories = [ "avm-property-value", "avm-meetings", "avm-genertel-poc",
-    "finbox-meetings", "finbox-gara-mcc", "finbox-privati",
-    "finbox-deploy-affordability", "smart-lending-suite-meetings",
-    "side-project-tools-n-pipeline", "dss-best-practices", "other"
-]
+categories = ["avm-property-value", "avm-meetings", "avm-genertel-poc",
+              "finbox-meetings", "finbox-gara-mcc", "finbox-privati",
+              "finbox-deploy-affordability", "smart-lending-suite-meetings",
+              "side-project-tools-n-pipeline", "dss-best-practices", "other"
+              ]

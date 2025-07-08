@@ -24,6 +24,7 @@ dependencies = [
     "plotly-express>=0.4.1",
     "pyarrow>=17.0.0",
     "pytest>=8.3.5",
+    "pytz>=2025.2",
     "seaborn>=0.13.2",
     "streamlit>=1.40.1",
 ]
