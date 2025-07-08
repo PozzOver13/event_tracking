@@ -5,6 +5,8 @@ import pandas as pd
 import pytz
 from dotenv import load_dotenv, find_dotenv
 
+from transformers import pipeline
+
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -321,3 +323,120 @@ categories = ["avm-property-value", "avm-meetings", "avm-genertel-poc",
               "finbox-deploy-affordability", "smart-lending-suite-meetings",
               "side-project-tools-n-pipeline", "dss-best-practices", "other"
               ]
+
+# Definizione dello schema della funzione per OpenAI
+CLASSIFY_EVENT_TOOL_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "classify_events",
+        "description": "Classifica una lista di riepiloghi di eventi di calendario in categorie predefinite.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "classifications": {
+                    "type": "array",
+                    "description": "Lista di oggetti, ognuno con l'ID originale e la categoria classificata.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer", "description": "L'ID originale del riepilogo dell'evento."},
+                            "category": {
+                                "type": "string",
+                                "description": "La categoria classificata per l'evento.",
+                                "enum": categories # Usa le tue categorie come enum per vincolare la risposta
+                            }
+                        },
+                        "required": ["id", "category"]
+                    }
+                }
+            },
+            "required": ["classifications"]
+        }
+    }
+}
+
+
+def classify_batch_openai_function_calling(llm_app, summaries, categories_list):
+    """
+    Classifica un batch di riepiloghi di eventi usando le API di OpenAI con Function Calling.
+    """
+    messages = [
+        {"role": "system",
+         "content": f"Classifica i riepiloghi degli eventi nelle seguenti categorie: {', '.join(categories_list)}. Se una categoria non è appropriata, usa 'other'."},
+        {"role": "user", "content": "Classifica i seguenti riepiloghi:\n" + "\n".join(
+            [f"ID {i}: {s}" for i, s in enumerate(summaries)])}
+    ]
+
+    try:
+        # Nota: La classe ChatOpenAI di langchain potrebbe non supportare direttamente 'tools' o 'tool_choice'
+        # nella sua interfaccia `invoke` in modo semplice come la libreria `openai` raw.
+        # Per un controllo più granulare e per assicurare l'uso delle tool_calls, potremmo dover usare
+        # direttamente l'API client di openai qui, invece di llm_app.invoke().
+
+        # Alternativa 1: Usando la libreria openai direttamente (più robusto per tool_calling)
+        client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            tools=[CLASSIFY_EVENT_TOOL_SCHEMA],
+            tool_choice={"type": "function", "function": {"name": "classify_events"}}  # Forza l'uso della funzione
+        )
+
+        tool_calls = response.choices[0].message.tool_calls
+        if not tool_calls:
+            raise ValueError("Il modello non ha richiamato la funzione 'classify_events'.")
+
+        function_args_str = tool_calls[0].function.arguments
+        parsed_args = json.loads(function_args_str)
+
+        # Estrai le classificazioni e mettile in un dizionario per mantenere l'ordine
+        category_map = {item["id"]: item["category"] for item in parsed_args.get("classifications", [])}
+
+        # Costruisci la lista dei risultati nell'ordine originale dei summaries
+        results = [category_map.get(i, "other") for i in range(len(summaries))]
+        return results
+
+    except json.JSONDecodeError as e:
+        print(f"Errore nel parsing JSON dai tool_calls: {e}")
+        print(f"Risposta raw: {function_args_str}")
+        return ["other"] * len(summaries)
+    except Exception as e:
+        print(f"Errore nella classificazione con OpenAI Function Calling: {e}")
+        return ["other"] * len(summaries)
+
+
+# 2. `classify_batch_huggingface_zero_shot` (Classificazione Zero-Shot con Hugging Face)
+
+# Inizializza il classificatore zero-shot una sola volta
+# Questo caricherà il modello la prima volta che la funzione viene chiamata.
+# Puoi spostarlo fuori dalla funzione se chiami questa funzione molte volte,
+# per evitare di ricaricare il modello.
+_zero_shot_classifier = None
+
+
+def get_zero_shot_classifier():
+    global _zero_shot_classifier
+    if _zero_shot_classifier is None:
+        print("Caricamento del modello Hugging Face per la classificazione zero-shot. Potrebbe richiedere del tempo...")
+        _zero_shot_classifier = pipeline("zero-shot-classification",
+                                         model="MoritzLaurer/Deberta-v3-large-mnli-fever-anli-ling-wanli")
+        print("Modello Hugging Face caricato.")
+    return _zero_shot_classifier
+
+
+def classify_batch_huggingface_zero_shot(summaries, categories_list):
+    """
+    Classifica un batch di riepiloghi di eventi usando un modello Zero-Shot di Hugging Face.
+    """
+    classifier = get_zero_shot_classifier()
+
+    # I modelli Zero-Shot di solito restituiscono score di confidenza per tutte le etichette.
+    # Selezioniamo la label con il punteggio più alto.
+    results = classifier(summaries, candidate_labels=categories_list)
+
+    classified_categories = []
+    for res in results:
+        # res['labels'][0] è la categoria con lo score più alto
+        classified_categories.append(res['labels'][0])
+
+    return classified_categories
