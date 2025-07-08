@@ -39,30 +39,10 @@ The main goal is to explore and learn, so the codebase will evolve iteratively w
 - Learn and experiment with **LangChain**, **DuckDB**, **Streamlit**.
 - Build a personal dashboard that is useful and sustainable over time.
 
-## 🧱 Next Steps
+## Endpoint
 
-- [ ] Define data structure for events
-- [ ] Set up base Streamlit app
-- [ ] Automatic event parsing and categorization using LLM
-- [ ] Visualization of goal progression over time
-
-## 📂 Proposed Repository Structure
-
-```
-├── README.md
-├── data
-|   ├── raw                          <- The original, immutable data dump.
-│   ├── processed                    <- The final, canonical data sets for modeling.
-│
-├── development                      <- Jupyter notebooks and Python Scripts. Naming convention to be defined
-│
-├── reports                          <- Generated analysis as XLSX, HTML, PDF, LaTeX, etc.
-│
-└── {{ cookiecutter.module_name }}   <- Source code for use in this project.
-    ├── __init__.py                  <- Makes {{ cookiecutter.module_name }} a Python module
-    │
-    ├── config.py                    <- Store useful variables and configuration
-```
+- create_calendar_db.py: Script that download events from my calendars and categorize them using a personal classification. (RK = If expired, deleted the token file)
+- dashboard.py: 
 
 ## Dashboard
 

@@ -260,6 +260,16 @@ def categorize_calendar_events(events_df, batch_size=10):
         .merge(events_df_work, on=["calendar_name", "summary"], how="left")
     )
 
+    events_df_categorized['start_time'] = pd.to_datetime(
+        events_df_categorized['start_time'],
+        errors='coerce',
+        utc=True
+    ).dt.tz_convert(None)
+
+    events_df_categorized['year_only'] = events_df_categorized['start_time'].dt.year.astype(str)
+    events_df_categorized['year_month'] = events_df_categorized['start_time'].dt.strftime('%Y-%m')
+    events_df_categorized['year_month_week'] = events_df_categorized['start_time'].dt.strftime('%Y-%m-') + events_df_categorized['week_number'].astype(str).str.zfill(2)
+
     return events_df_categorized
 
 
